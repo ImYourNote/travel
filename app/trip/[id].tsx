@@ -3,8 +3,10 @@ import { useLocalSearchParams, Stack } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { useTripStore } from '@/store/tripStore';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Trip, Day, ContentItem } from '@/types';
+import { saveFileToLocal, generateFileName } from '@/lib/fileSystem';
 
 /**
  * 여행 상세 화면
@@ -12,14 +14,12 @@ import { Trip, Day, ContentItem } from '@/types';
  */
 export default function TripDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    // store에서 필요한 상태와 함수들을 가져옵니다
     const { trips, loadTrips, addContentItem } = useTripStore();
 
     const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
     const [selectedDay, setSelectedDay] = useState(1);
     const [isUploading, setIsUploading] = useState(false);
 
-    // ID로 현재 여행 찾기
     useEffect(() => {
         if (trips.length === 0) {
             loadTrips();
@@ -47,14 +47,12 @@ export default function TripDetailScreen() {
 
     const handleAddPhoto = async () => {
         try {
-            // 갤러리 접근 권한 요청
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('권한 필요', '사진을 올리려면 갤러리 접근 권한이 필요합니다.');
                 return;
             }
 
-            // 이미지 선택
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
@@ -63,15 +61,16 @@ export default function TripDetailScreen() {
 
             if (!result.canceled && currentDay) {
                 setIsUploading(true);
-                // TODO: 실제로는 여기서 제목을 입력받는 모달을 띄워야 함
-                // 지금은 임시로 자동 제목 생성
                 const asset = result.assets[0];
+                const fileName = generateFileName(asset.uri);
+                const savedUri = await saveFileToLocal(asset.uri, fileName);
+
                 const defaultTitle = `${selectedDay}일차 사진 ${currentDay.items.length + 1}`;
 
                 await addContentItem(currentTrip.id, currentDay.id, {
                     title: defaultTitle,
                     type: 'photo',
-                    uri: asset.uri,
+                    uri: savedUri,
                 });
                 setIsUploading(false);
             }
@@ -80,6 +79,54 @@ export default function TripDetailScreen() {
             Alert.alert('오류', '사진을 추가하는데 실패했습니다.');
             setIsUploading(false);
         }
+    };
+
+    const handleAddFile = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && currentDay) {
+                setIsUploading(true);
+                const asset = result.assets[0];
+                const fileName = generateFileName(asset.uri);
+                const savedUri = await saveFileToLocal(asset.uri, fileName);
+
+                await addContentItem(currentTrip.id, currentDay.id, {
+                    title: asset.name,
+                    type: 'file',
+                    uri: savedUri,
+                });
+                setIsUploading(false);
+            }
+        } catch (error) {
+            console.error('파일 추가 실패:', error);
+            Alert.alert('오류', '파일을 추가하는데 실패했습니다.');
+            setIsUploading(false);
+        }
+    };
+
+    const showAddOptions = () => {
+        Alert.alert(
+            '자료 추가하기',
+            '어떤 자료를 추가하시겠습니까?',
+            [
+                {
+                    text: '사진/캡처',
+                    onPress: handleAddPhoto,
+                },
+                {
+                    text: '파일(PDF 등)',
+                    onPress: handleAddFile,
+                },
+                {
+                    text: '취소',
+                    style: 'cancel',
+                },
+            ]
+        );
     };
 
     return (
@@ -124,22 +171,22 @@ export default function TripDetailScreen() {
             <View style={styles.content}>
                 {currentDay && currentDay.items.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyIcon}>📸</Text>
+                        <Text style={styles.emptyIcon}>📂</Text>
                         <Text style={styles.emptyTitle}>
                             {selectedDay}일차 자료가 없습니다
                         </Text>
                         <Text style={styles.emptySubtitle}>
-                            티켓이나 바우처를 추가해보세요!
+                            티켓, 바우처, PDF 등을 추가해보세요!
                         </Text>
                         <TouchableOpacity
                             style={styles.addButton}
-                            onPress={handleAddPhoto}
+                            onPress={showAddOptions}
                             disabled={isUploading}
                         >
                             {isUploading ? (
                                 <ActivityIndicator color="white" />
                             ) : (
-                                <Text style={styles.addButtonText}>+ 사진 추가</Text>
+                                <Text style={styles.addButtonText}>+ 자료 추가</Text>
                             )}
                         </TouchableOpacity>
                     </View>
@@ -148,11 +195,20 @@ export default function TripDetailScreen() {
                         <ScrollView style={styles.itemsList}>
                             {currentDay?.items.map((item) => (
                                 <TouchableOpacity key={item.id} style={styles.itemCard}>
-                                    <Image source={{ uri: item.uri }} style={styles.itemImage} />
+                                    {item.type === 'photo' ? (
+                                        <Image source={{ uri: item.uri }} style={styles.itemImage} />
+                                    ) : (
+                                        <View style={[styles.itemImage, styles.fileIcon]}>
+                                            <Ionicons name="document-text" size={32} color="#666" />
+                                            <Text style={styles.fileExt} numberOfLines={1}>
+                                                {item.title.split('.').pop()}
+                                            </Text>
+                                        </View>
+                                    )}
                                     <View style={styles.itemInfo}>
-                                        <Text style={styles.itemTitle}>{item.title}</Text>
+                                        <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
                                         <Text style={styles.itemType}>
-                                            {item.type === 'photo' ? '사진' : '파일'}
+                                            {item.type === 'photo' ? '사진' : '파일'} • {new Date(item.createdAt).toLocaleDateString()}
                                         </Text>
                                     </View>
                                     <Ionicons name="chevron-forward" size={20} color="#999" />
@@ -161,10 +217,9 @@ export default function TripDetailScreen() {
                             <View style={{ height: 100 }} />
                         </ScrollView>
 
-                        {/* 리스트가 있을 때만 우측 하단 플로팅 버튼 표시 */}
                         <TouchableOpacity
                             style={styles.floatingButton}
-                            onPress={handleAddPhoto}
+                            onPress={showAddOptions}
                         >
                             <Ionicons name="add" size={30} color="white" />
                         </TouchableOpacity>
@@ -274,6 +329,18 @@ const styles = StyleSheet.create({
         height: 60,
         borderRadius: 8,
         backgroundColor: '#F0F0F0',
+    },
+    fileIcon: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#E3F2FD',
+    },
+    fileExt: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#666',
+        marginTop: -4,
+        maxWidth: 50,
     },
     itemInfo: {
         flex: 1,
