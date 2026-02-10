@@ -110,7 +110,7 @@ iOS, Android, 그리고 **Web**까지 완벽하게 지원합니다.
 ### 1️⃣ 저장소 클론
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/travel.git
+git clone https://github.com/ImYourNote/travel.git
 cd travel
 ```
 
