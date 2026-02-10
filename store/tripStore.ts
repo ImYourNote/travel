@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Trip, Day, ContentItem } from '@/types';
+import { Trip, Day, ContentItem, ChecklistItem } from '@/types';
 import { storage } from '@/lib/storage';
 
 interface TripState {
@@ -13,11 +13,15 @@ interface TripState {
     setCurrentTrip: (id: string) => void;
     addTrip: (title: string, startDate: string, endDate: string) => Promise<void>;
     addContentItem: (tripId: string, dayId: string, item: Omit<ContentItem, 'id' | 'createdAt' | 'dayId'>) => Promise<void>;
+    addChecklistItem: (tripId: string, text: string) => Promise<void>;
+    toggleChecklistItem: (tripId: string, itemId: string) => Promise<void>;
+    removeChecklistItem: (tripId: string, itemId: string) => Promise<void>;
 }
 
 /**
  * 여행 상태 관리 스토어 (Zustand)
  * 전역 상태를 관리하고 비즈니스 로직을 처리합니다.
+ * [코다리 부장] 여기서 앱의 모든 데이터를 든든하게 관리합니다! 🛡️
  */
 export const useTripStore = create<TripState>((set, get) => ({
     trips: [],
@@ -72,6 +76,7 @@ export const useTripStore = create<TripState>((set, get) => ({
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 days,
+                checklist: [],
             };
 
             await storage.addTrip(newTrip);
@@ -118,6 +123,98 @@ export const useTripStore = create<TripState>((set, get) => ({
             });
         } catch {
             set({ error: '자료를 추가하는데 실패했습니다', isLoading: false });
+        }
+    },
+
+    addChecklistItem: async (tripId: string, text: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+
+            // 기존 데이터에 checklist가 없는 경우를 대비
+            if (!updatedTrip.checklist) updatedTrip.checklist = [];
+
+            const newItem: ChecklistItem = {
+                id: Date.now().toString(),
+                tripId,
+                text,
+                isChecked: false,
+                createdAt: new Date().toISOString(),
+            };
+
+            updatedTrip.checklist.push(newItem);
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
+            set({ error: '체크리스트 추가 실패' });
+        }
+    },
+
+    toggleChecklistItem: async (tripId: string, itemId: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+            if (!updatedTrip.checklist) return;
+
+            const itemIndex = updatedTrip.checklist.findIndex(i => i.id === itemId);
+            if (itemIndex === -1) return;
+
+            updatedTrip.checklist[itemIndex].isChecked = !updatedTrip.checklist[itemIndex].isChecked;
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
+    removeChecklistItem: async (tripId: string, itemId: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+            if (!updatedTrip.checklist) return;
+
+            updatedTrip.checklist = updatedTrip.checklist.filter(i => i.id !== itemId);
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
         }
     },
 }));

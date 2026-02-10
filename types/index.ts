@@ -8,6 +8,15 @@ export type Trip = {
     createdAt: string;
     updatedAt: string;
     days: Day[];
+    checklist: ChecklistItem[];
+};
+
+export type ChecklistItem = {
+    id: string;
+    tripId: string;
+    text: string;
+    isChecked: boolean;
+    createdAt: string;
 };
 
 export type Day = {

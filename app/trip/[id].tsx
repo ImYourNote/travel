@@ -7,6 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Trip } from '@/types';
 import { saveFileToLocal, generateFileName } from '@/lib/fileSystem';
+import ChecklistTab from '@/components/ChecklistTab';
 
 /**
  * 여행 상세 화면
@@ -17,7 +18,7 @@ export default function TripDetailScreen() {
     const { trips, loadTrips, addContentItem } = useTripStore();
 
     const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
-    const [selectedDay, setSelectedDay] = useState(1);
+    const [selectedDay, setSelectedDay] = useState(1); // 1~N: Day, -1: Checklist
     const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
@@ -200,12 +201,30 @@ export default function TripDetailScreen() {
                             </Text>
                         </TouchableOpacity>
                     ))}
+                    <TouchableOpacity
+                        style={[
+                            styles.tab,
+                            selectedDay === -1 && styles.tabActive,
+                        ]}
+                        onPress={() => setSelectedDay(-1)}
+                    >
+                        <Text
+                            style={[
+                                styles.tabText,
+                                selectedDay === -1 && styles.tabTextActive,
+                            ]}
+                        >
+                            준비물
+                        </Text>
+                    </TouchableOpacity>
                 </ScrollView>
             </View>
 
             {/* 콘텐츠 영역 */}
             <View style={styles.content}>
-                {currentDay && currentDay.items.length === 0 ? (
+                {selectedDay === -1 ? (
+                    <ChecklistTab trip={currentTrip} />
+                ) : currentDay && currentDay.items.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyIcon}>📂</Text>
                         <Text style={styles.emptyTitle}>
