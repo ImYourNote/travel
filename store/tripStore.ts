@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Trip, Day, ContentItem, ChecklistItem } from '@/types';
 import { storage } from '@/lib/storage';
+import { deleteFile } from '@/lib/fileSystem';
 
 interface TripState {
     trips: Trip[];
@@ -16,6 +17,9 @@ interface TripState {
     addChecklistItem: (tripId: string, text: string) => Promise<void>;
     toggleChecklistItem: (tripId: string, itemId: string) => Promise<void>;
     removeChecklistItem: (tripId: string, itemId: string) => Promise<void>;
+    updateDayTitle: (tripId: string, dayId: string, title: string) => Promise<void>;
+    addDay: (tripId: string) => Promise<void>;
+    deleteDay: (tripId: string, dayId: string) => Promise<void>;
 }
 
 /**
@@ -202,6 +206,116 @@ export const useTripStore = create<TripState>((set, get) => ({
             if (!updatedTrip.checklist) return;
 
             updatedTrip.checklist = updatedTrip.checklist.filter(i => i.id !== itemId);
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
+    updateDayTitle: async (tripId: string, dayId: string, title: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+            const dayIndex = updatedTrip.days.findIndex(d => d.id === dayId);
+            if (dayIndex === -1) return;
+
+            updatedTrip.days[dayIndex].title = title;
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
+    addDay: async (tripId: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+
+            // 마지막 날짜 찾기
+            const lastDay = updatedTrip.days[updatedTrip.days.length - 1];
+            const lastDate = new Date(lastDay.date);
+            const nextDate = new Date(lastDate);
+            nextDate.setDate(nextDate.getDate() + 1);
+
+            const newDayNumber = lastDay.dayNumber + 1;
+            const newDay: Day = {
+                id: `${tripId}_day_${Date.now()}`,
+                tripId,
+                dayNumber: newDayNumber,
+                date: nextDate.toISOString().split('T')[0],
+                items: [],
+            };
+
+            updatedTrip.days.push(newDay);
+            updatedTrip.endDate = newDay.date;
+            updatedTrip.updatedAt = new Date().toISOString();
+
+            await storage.updateTrip(updatedTrip);
+
+            const newTrips = [...trips];
+            newTrips[tripIndex] = updatedTrip;
+
+            set({
+                trips: newTrips,
+                currentTrip: updatedTrip.id === get().currentTrip?.id ? updatedTrip : get().currentTrip,
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
+    deleteDay: async (tripId: string, dayId: string) => {
+        try {
+            const { trips } = get();
+            const tripIndex = trips.findIndex((t) => t.id === tripId);
+            if (tripIndex === -1) return;
+
+            const updatedTrip = { ...trips[tripIndex] };
+
+            // [코다리 부장] 해당 일차에 들어있는 사진/파일들 먼저 싹 청소합니다! 🧹🐟
+            const dayToDelete = updatedTrip.days.find(d => d.id === dayId);
+            if (dayToDelete) {
+                for (const item of dayToDelete.items) {
+                    await deleteFile(item.uri);
+                }
+            }
+
+            // 해당 일차 삭제
+            updatedTrip.days = updatedTrip.days.filter(d => d.id !== dayId);
+
+            // [코다리 부장] dayNumber 재정렬을 제거하여 "2일차"가 "1일차"로 바뀌지 않게 합니다! ✨
+
+            // 여행 종료일 업데이트
+            if (updatedTrip.days.length > 0) {
+                updatedTrip.endDate = updatedTrip.days[updatedTrip.days.length - 1].date;
+            }
+
             updatedTrip.updatedAt = new Date().toISOString();
 
             await storage.updateTrip(updatedTrip);

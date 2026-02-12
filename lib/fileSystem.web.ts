@@ -25,3 +25,7 @@ export const generateFileName = (originalUri: string): string => {
     const random = Math.floor(Math.random() * 1000);
     return `asset_${timestamp}_${random}.${ext}`;
 };
+export const deleteFile = async (uri: string): Promise<void> => {
+    console.log('Web environment: deleteFile skipped for URL', uri);
+    // URL.revokeObjectURL(uri)를 호출할 수도 있지만, 여기서는 단순히 로그만 남깁니다.
+};

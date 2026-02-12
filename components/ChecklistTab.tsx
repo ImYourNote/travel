@@ -47,11 +47,8 @@ export default function ChecklistTab({ trip }: ChecklistTabProps) {
     );
 
     const checklist = trip.checklist || [];
-    const sortedChecklist = [...checklist].sort((a, b) => {
-        // 미완료 항목이 위로, 완료된 항목이 아래로
-        if (a.isChecked === b.isChecked) return 0;
-        return a.isChecked ? 1 : -1;
-    });
+    // [코다리 부장] 완료 여부와 상관없이 추가한 순서대로 유지하도록 정렬을 제거합니다! ✨
+    const sortedChecklist = [...checklist];
 
     return (
         <View style={styles.container}>

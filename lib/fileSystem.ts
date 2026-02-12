@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
-const TRIP_ASSETS_DIR = FileSystem.documentDirectory + 'trip_assets/';
+const TRIP_ASSETS_DIR = (FileSystem.documentDirectory || '') + 'trip_assets/';
 
 /**
  * 앱 전용 자산 디렉토리가 존재하는지 확인하고 없으면 생성합니다.
@@ -54,4 +54,20 @@ export const generateFileName = (originalUri: string): string => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
     return `asset_${timestamp}_${random}.${ext}`;
+};
+
+/**
+ * 로컬 저장소에서 파일을 삭제합니다.
+ */
+export const deleteFile = async (uri: string): Promise<void> => {
+    if (Platform.OS === 'web') return; // 웹에서는 메모리 URL이므로 자동 해제됨
+
+    try {
+        const fileInfo = await FileSystem.getInfoAsync(uri);
+        if (fileInfo.exists) {
+            await FileSystem.deleteAsync(uri);
+        }
+    } catch (error) {
+        console.error('파일 삭제 실패:', error);
+    }
 };
